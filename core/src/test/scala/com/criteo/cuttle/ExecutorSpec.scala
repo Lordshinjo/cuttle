@@ -15,7 +15,7 @@ import com.criteo.cuttle.Utils.logger
 
 import com.criteo.cuttle.Metrics.Prometheus
 
-class ExecutorSpec extends FunSuite with TestScheduling {
+class ExecutorSpec extends FunSuite with UseTestScheduling {
 
   test("Executor should return metrics aggregated by job and tag") {
     val connection: Connection = {

@@ -2,20 +2,23 @@ package com.criteo.cuttle.platforms.http
 
 import java.util.concurrent.TimeUnit
 
-import scala.concurrent.duration.FiniteDuration
-import scala.concurrent._
-
 import cats.effect.IO
-import io.circe._
-import io.circe.syntax._
-import lol.http._
-import lol.json._
-
+import cats.syntax.semigroupk._
 import com.criteo.cuttle._
 import com.criteo.cuttle.platforms.{ExecutionPool, RateLimiter}
+import io.circe._
+import io.circe.syntax._
+import org.http4s.circe._
+import org.http4s.client.blaze.BlazeClientBuilder
+import org.http4s.dsl.io._
+import org.http4s.headers.Host
+import org.http4s.{HttpRoutes, Request, Response}
+
+import scala.concurrent._
+import scala.concurrent.duration.FiniteDuration
 
 /** Allow to make HTTP calls in a managed way with rate limiting. Globally the platform limits the number
-  * of concurrent requests on the platform. Additionnaly a rate limiter must be defined for each host allowed
+  * of concurrent requests on the platform. Additionally a rate limiter must be defined for each host allowed
   * to be called by this platform.
   *
   * Example:
@@ -53,10 +56,10 @@ case class HttpPlatform(maxConcurrentRequests: Int, rateLimits: Seq[(String, Htt
   override def waiting: Set[Execution[_]] =
     rateLimiters.map(_._2).foldLeft(pool.waiting)(_ ++ _.waiting)
 
-  override lazy val publicRoutes: PartialService =
-    pool.routes("/api/platforms/http/pool").orElse {
-      val index: PartialService = {
-        case GET at url"/api/platforms/http/rate-limiters" =>
+  override lazy val publicRoutes: HttpRoutes[IO] =
+    pool.routes(Root / "api" / "platforms" / "http" / "pool") <+> {
+      val index = HttpRoutes.of[IO] {
+        case GET -> Root / "api" / "platforms" / "http" / "rate-limiters" =>
           Ok(
             Json.obj(
               rateLimiters.zipWithIndex.map {
@@ -72,7 +75,7 @@ case class HttpPlatform(maxConcurrentRequests: Int, rateLimits: Seq[(String, Htt
       }
       rateLimiters.zipWithIndex.foldLeft(index) {
         case (routes, ((_, rateLimiter), i)) =>
-          routes.orElse(rateLimiter.routes(s"/api/platforms/http/rate-limiters/$i"))
+          routes <+> rateLimiter.routes(Root / "api" / "platforms" / "http" / "rate-limiters" / i.toString)
       }
     }
 }
@@ -89,21 +92,23 @@ object HttpPlatform {
 
   /** Make an HTTP request via the platorm.
     *
-    * @param request The [[lol.http.Request Request]] to run.
+    * @param request The [[Request]] to run.
     * @param thunk The function handling the HTTP resposne once received.
     */
-  def request[A, S <: Scheduling](request: Request, timeout: FiniteDuration = FiniteDuration(30, "seconds"))(
-    thunk: Response => Future[A]
+  def request[A, S <: Scheduling](request: Request[IO], timeout: FiniteDuration = FiniteDuration(30, "seconds"))(
+    thunk: Response[IO] => Future[A]
   )(implicit execution: Execution[S]): Future[A] = {
     val streams = execution.streams
     streams.debug(s"HTTP request: ${request}")
+    val ec = implicitly[ExecutionContext]
+    implicit val cs = IO.contextShift(ec)
 
     val httpPlatform =
       ExecutionPlatform.lookup[HttpPlatform].getOrElse(sys.error("No http execution platform configured"))
     httpPlatform.pool.run(execution, debug = request.toString) { () =>
       try {
         val host =
-          request.headers.getOrElse(h"Host", sys.error("`Host' header must be present in the request")).toString
+          request.headers.get(Host).getOrElse(sys.error("`Host' header must be present in the request")).value
         val rateLimiter = httpPlatform.rateLimiters
           .collectFirst {
             case (pattern, rateLimiter) if host.matches(pattern) =>
@@ -112,10 +117,13 @@ object HttpPlatform {
           .getOrElse(sys.error(s"A rate limiter should be defined for `${host}'"))
 
         rateLimiter.run(execution, debug = request.toString) { () =>
-          Client
-            .run(request, timeout = timeout) { response =>
-              streams.debug(s"Got response: $response")
-              IO.fromFuture(IO.pure(thunk(response)))
+          BlazeClientBuilder[IO](ec)
+            .withRequestTimeout(timeout)
+            .resource
+            .use { client =>
+              client.fetch(request) { resp =>
+                IO.fromFuture(IO(thunk(resp)))
+              }
             }
             .unsafeToFuture()
         }

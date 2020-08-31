@@ -11,23 +11,23 @@ import scala.concurrent.duration._
 import scala.concurrent.duration.{Duration => ScalaDuration}
 import scala.concurrent.stm._
 import scala.concurrent.{Future, Promise}
-import scala.reflect.{classTag, ClassTag}
+import scala.reflect.{ClassTag, classTag}
 import scala.util._
 import cats.Eq
 import cats.effect.IO
 import cats.implicits._
+import com.criteo.cuttle.Auth.User
 import doobie.implicits._
 import doobie.util.fragment.Fragment
 import io.circe._
 import io.circe.java8.time._
 import io.circe.syntax._
-import lol.http.PartialService
-import com.criteo.cuttle.Auth._
 import com.criteo.cuttle.ExecutionStatus._
 import com.criteo.cuttle.ThreadPools.{SideEffectThreadPool, _}
 import com.criteo.cuttle.Metrics._
 import com.criteo.cuttle.platforms.ExecutionPool
 import doobie.util.Meta
+import org.http4s.{AuthedRoutes, HttpRoutes}
 
 /** The strategy to use to retry stuck executions.
   *
@@ -386,11 +386,11 @@ private[cuttle] object Execution {
 /** An [[ExecutionPlatform]] provides controlled access to shared resources. */
 trait ExecutionPlatform {
 
-  /** Expose a public `lolhttp` service for the platform internal statistics (for the UI and API). */
-  def publicRoutes: PartialService = PartialFunction.empty
+  /** Expose public `http4s` routes for the platform internal statistics (for the UI and API). */
+  def publicRoutes: HttpRoutes[IO] = HttpRoutes.empty
 
-  /** Expose a private `lolhttp` service for the platform operations (for the UI and API). */
-  def privateRoutes: AuthenticatedService = PartialFunction.empty
+  /** Expose a private `http4s` routes for the platform operations (for the UI and API). */
+  def privateRoutes: Auth.Routes = AuthedRoutes.empty
 
   /** @return the list of [[Execution]] waiting for resources on this platform.
     * These executions will be seen as __WAITING__ in the UI and the API. */

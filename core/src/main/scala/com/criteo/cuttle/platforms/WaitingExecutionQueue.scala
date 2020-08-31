@@ -1,22 +1,21 @@
 package com.criteo.cuttle.platforms
 
 import com.criteo.cuttle._
-
 import java.time._
 
-import lol.http._
-import lol.json._
+import cats.effect.IO
+import org.http4s.dsl.io._
 
 import scala.concurrent._
 import scala.concurrent.stm._
 import scala.collection.SortedSet
-
 import scala.util._
 import scala.concurrent.ExecutionContext.Implicits.global
-
 import io.circe._
 import io.circe.syntax._
 import io.circe.java8.time._
+import org.http4s.HttpRoutes
+import org.http4s.circe._
 
 /** A priority queue ordered by [[com.criteo.cuttle.SchedulingContext SchedulingContext]] priority. */
 trait WaitingExecutionQueue {
@@ -107,8 +106,8 @@ trait WaitingExecutionQueue {
     }
   }
 
-  def routes(urlPrefix: String): PartialService = {
-    case req if req.url == s"$urlPrefix/running" =>
+  def routes(urlPrefix: Path): HttpRoutes[IO] = HttpRoutes.of {
+    case _ -> `urlPrefix` / "running" =>
       Ok(this._running.single.get.toSeq.map {
         case (execution, task) =>
           Json.obj(
@@ -116,7 +115,7 @@ trait WaitingExecutionQueue {
             "task" -> task.asJson
           )
       }.asJson)
-    case req if req.url == s"$urlPrefix/waiting" =>
+    case _ -> `urlPrefix` / "waiting" =>
       Ok(this._waiting.single.get.toSeq.map {
         case (execution, task) =>
           Json.obj(

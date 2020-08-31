@@ -2,10 +2,12 @@ package com.criteo.cuttle.platforms.local
 
 import java.nio.ByteBuffer
 
+import cats.effect.IO
 import com.criteo.cuttle._
+import org.http4s.dsl.io._
 import com.criteo.cuttle.platforms.ExecutionPool
 import com.zaxxer.nuprocess._
-import lol.http.PartialService
+import org.http4s.HttpRoutes
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Future, Promise}
@@ -25,8 +27,8 @@ case class LocalPlatform(maxForkedProcesses: Int) extends ExecutionPlatform {
   override def waiting: Set[Execution[_]] =
     pool.waiting
 
-  override lazy val publicRoutes: PartialService =
-    pool.routes("/api/platforms/local/pool")
+  override lazy val publicRoutes: HttpRoutes[IO] =
+    pool.routes(Root / "api" / "platforms" / "local" / "pool")
 }
 
 /** Represent a process to be locally foked.

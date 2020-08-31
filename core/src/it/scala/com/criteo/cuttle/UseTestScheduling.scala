@@ -7,7 +7,7 @@ import io.circe.Json
 
 import scala.concurrent.Future
 
-trait TestScheduling {
+trait UseTestScheduling {
   case class TestDependencyDescriptor()
 
   object TestDependencyDescriptor {

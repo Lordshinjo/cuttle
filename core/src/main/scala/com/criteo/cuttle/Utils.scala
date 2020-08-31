@@ -1,21 +1,22 @@
 package com.criteo.cuttle
 
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 import java.lang.management.ManagementFactory
 import java.time.Instant
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
-import scala.concurrent.duration.{Duration, FiniteDuration}
-import scala.concurrent.{ExecutionContext, Future, Promise}
-import cats.effect.{IO, Resource, Timer}
 import cats.Eq
+import cats.effect.{IO, Resource, Timer}
 import cats.implicits._
 import doobie._
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import io.circe.Json
-import lol.http.{PartialService, ServerSentEvents, Service}
-import lol.http._
+import org.http4s.dsl.io._
+import org.http4s.{Response, ServerSentEvent}
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 
 /** A set of basic utilities useful to write workflows. */
 package object utils {
@@ -119,39 +120,26 @@ package object utils {
 
   private[cuttle] def randomUUID(): String = UUID.randomUUID().toString
 
-  /**
-    * Allows chaining of method orFinally
-    * from a PartialService that returns a
-    * non-further-chainable Service.
-    */
-  implicit private[cuttle] class PartialServiceConverter(val service: PartialService) extends AnyVal {
-    def orFinally(finalService: Service): Service =
-      service.orElse(toPartial(finalService))
-
-    private def toPartial(service: Service): PartialService = {
-      case e => service(e)
-    }
-  }
-
   private[cuttle] def getJVMUptime = ManagementFactory.getRuntimeMXBean.getUptime / 1000
 
   private[cuttle] def sse[A](thunk: IO[Option[A]],
-                             encode: A => IO[Json])(implicit eqInstance: Eq[A]): lol.http.Response = {
-    import scala.concurrent.duration._
-    import io.circe._
-    import lol.json._
-    import fs2.Stream
+                             encode: A => IO[Json])(implicit eqInstance: Eq[A]): IO[Response[IO]] = {
     import com.criteo.cuttle.ThreadPools.Implicits.serverContextShift
+    import fs2.Stream
 
-    val stream = (Stream.emit(()) ++ Stream.fixedRate[IO](1.seconds))
-      .evalMap[IO, Option[A]](_ => IO.shift.flatMap(_ => thunk))
-      .flatMap({
-        case Some(x) => Stream(x)
-        case None    => Stream.raiseError[IO](new RuntimeException("Could not get result to stream"))
-      })
-      .changes
-      .evalMap[IO, Json](r => encode(r))
-      .map(ServerSentEvents.Event(_))
+    import scala.concurrent.duration._
+
+    val stream = Stream.emit(ServerSentEvent.empty) ++
+      Stream
+        .fixedRate[IO](1.seconds)
+        .evalMap[IO, Option[A]](_ => thunk)
+        .flatMap {
+          case Some(x) => Stream(x)
+          case None    => Stream.raiseError[IO](new RuntimeException("Could not get result to stream"))
+        }
+        .changes
+        .evalMap[IO, String](r => encode(r).map(_.noSpaces))
+        .map(ServerSentEvent(_))
 
     Ok(stream)
   }

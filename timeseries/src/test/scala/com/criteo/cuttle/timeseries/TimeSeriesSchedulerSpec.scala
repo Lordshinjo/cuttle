@@ -8,13 +8,13 @@ import org.scalatest.FunSuite
 import codes.reactive.scalatime._
 
 import com.criteo.cuttle.Auth
-import com.criteo.cuttle.{Completed, Job, TestScheduling}
+import com.criteo.cuttle.{Completed, Job, UseTestScheduling}
 import com.criteo.cuttle.timeseries.JobState.{Done, Todo}
 import com.criteo.cuttle.timeseries.TimeSeriesUtils.State
 import com.criteo.cuttle.timeseries.intervals.{Bound, Interval, IntervalMap}
 import com.criteo.cuttle.Utils.logger
 
-class TimeSeriesSchedulerSpec extends FunSuite with TestScheduling {
+class TimeSeriesSchedulerSpec extends FunSuite with UseTestScheduling {
   private val scheduling: TimeSeries = hourly(date"2017-03-25T02:00:00Z")
   private val testJob = Job("test_job", scheduling)(completed)
 

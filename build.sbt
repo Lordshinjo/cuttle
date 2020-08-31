@@ -6,7 +6,7 @@ val VERSION = "0.11.5"
 lazy val catsCore = "1.6.1"
 lazy val circe = "0.11.1"
 lazy val doobie = "0.7.0"
-lazy val lolhttp = "0.13.0"
+lazy val http4s = "0.20.23"
 
 lazy val commonSettings = Seq(
   organization := "com.criteo.cuttle",
@@ -180,10 +180,11 @@ lazy val cuttle =
     .settings(Defaults.itSettings: _*)
     .settings(
       libraryDependencies ++= Seq(
-        "com.criteo.lolhttp" %% "lolhttp",
-        "com.criteo.lolhttp" %% "loljson",
-        "com.criteo.lolhttp" %% "lolhtml"
-      ).map(_ % lolhttp),
+        "org.http4s" %% "http4s-blaze-client",
+        "org.http4s" %% "http4s-blaze-server",
+        "org.http4s" %% "http4s-circe",
+        "org.http4s" %% "http4s-dsl"
+      ).map(_ % http4s),
       libraryDependencies ++= Seq("core", "generic", "parser", "java8")
         .map(module => "io.circe" %% s"circe-$module" % circe),
       libraryDependencies ++= Seq(
@@ -331,8 +332,8 @@ lazy val root =
                 jar -> url("https://www.scala-lang.org/api/current/")
               case (jar, module) if module.name.contains("doobie") =>
                 jar -> url("https://www.javadoc.io/doc/org.tpolecat/doobie-core_2.12/0.4.1/")
-              case (jar, module) if module.name.contains("lolhttp") =>
-                jar -> url("https://criteo.github.io/lolhttp/api/")
+              case (jar, module) if module.name.contains("http4s") =>
+                jar -> url("https://http4s.org/v0.20/api/")
               case (jar, module) if module.name.contains("circe") =>
                 jar -> url("http://circe.github.io/circe/api/")
             }

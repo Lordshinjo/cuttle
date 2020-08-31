@@ -1,17 +1,19 @@
 package com.criteo.cuttle.platforms
 
-import scala.concurrent.stm._
-import scala.concurrent.duration._
 import java.time._
 
-import lol.http._
-import lol.json._
-import io.circe._
-import io.circe.syntax._
-import io.circe.java8.time._
 import cats.effect.IO
-
+import cats.syntax.semigroupk._
 import com.criteo.cuttle.utils.timer
+import io.circe._
+import io.circe.java8.time._
+import io.circe.syntax._
+import org.http4s.HttpRoutes
+import org.http4s.circe._
+import org.http4s.dsl.io._
+
+import scala.concurrent.duration._
+import scala.concurrent.stm._
 
 /**
   * An rate limiter pool backed by a priority queue. It rate limits the executions
@@ -45,9 +47,9 @@ class RateLimiter(tokens: Int, refillRateInMs: Int) extends WaitingExecutionQueu
   def canRunNextCondition(implicit txn: InTxn) = _tokens() >= 1
   def doRunNext()(implicit txn: InTxn) = _tokens() = _tokens() - 1
 
-  override def routes(urlPrefix: String) =
-    ({
-      case req if req.url == urlPrefix =>
+  override def routes(urlPrefix: Path): HttpRoutes[IO] =
+    HttpRoutes.of[IO] {
+      case _ -> `urlPrefix` =>
         Ok(
           Json.obj(
             "max_tokens" -> tokens.asJson,
@@ -56,6 +58,6 @@ class RateLimiter(tokens: Int, refillRateInMs: Int) extends WaitingExecutionQueu
             "last_refill" -> _lastRefill.single.get.asJson
           )
         )
-    }: PartialService).orElse(super.routes(urlPrefix))
+    } <+> super.routes(urlPrefix)
 
 }

@@ -1,10 +1,11 @@
 package com.criteo.cuttle.timeseries
 
-import lol.http._
+import cats.effect.IO
+import com.criteo.cuttle.ThreadPools._
+import com.criteo.cuttle.{Database => CuttleDatabase, _}
+import org.http4s.HttpApp
+import org.http4s.server.blaze.BlazeServerBuilder
 
-import com.criteo.cuttle._
-import com.criteo.cuttle.{Database => CuttleDatabase}
-import com.criteo.cuttle.ThreadPools._, Implicits.serverThreadPool
 import scala.concurrent.duration.Duration
 
 /**
@@ -44,6 +45,9 @@ class CuttleProject private[cuttle] (val name: String,
     maxVersionsHistory: Option[Int] = None,
     jobsToBePausedOnStartup: Set[Job[TimeSeries]] = Set.empty
   ): Unit = {
+    import Implicits.serverContextShift
+    implicit val timer = IO.timer(Implicits.serverThreadPool)
+
     val (routes, startScheduler) =
       build(platforms,
             databaseConfig,
@@ -57,12 +61,15 @@ class CuttleProject private[cuttle] (val name: String,
     startScheduler()
 
     logger.info("Start server")
-    Server.listen(port = httpPort, onError = { e =>
-      e.printStackTrace()
-      InternalServerError(e.getMessage)
-    })(routes)
+    val (server,  _) = BlazeServerBuilder[IO](ThreadPools.Implicits.serverThreadPool)
+      .withHttpApp(routes)
+      .bindHttp(httpPort, "0.0.0.0")
+      .resource
+      .allocated
+      .unsafeRunSync()
 
-    logger.info(s"Listening on http://localhost:$httpPort")
+
+    logger.info(s"Listening on ${server.address}")
   }
 
   /**
@@ -88,7 +95,7 @@ class CuttleProject private[cuttle] (val name: String,
     logsRetention: Option[Duration] = None,
     maxVersionsHistory: Option[Int] = None,
     jobsToBePausedOnStartup: Set[Job[TimeSeries]] = Set.empty
-  ): (Service, () => Unit) = {
+  ): (HttpApp[IO], () => Unit) = {
     val xa = CuttleDatabase.connect(databaseConfig)(logger)
     val executor = new Executor[TimeSeries](platforms, xa, logger, name, version, logsRetention)(retryStrategy)
     val scheduler = new TimeSeriesScheduler(logger, stateRetention, maxVersionsHistory)

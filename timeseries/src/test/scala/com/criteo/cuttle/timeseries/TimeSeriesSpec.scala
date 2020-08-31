@@ -10,7 +10,7 @@ import com.criteo.cuttle.timeseries.intervals.Bound.{Finite, Top}
 import com.criteo.cuttle.timeseries.intervals._
 import com.criteo.cuttle.Utils.logger
 
-class TimeSeriesSpec extends FunSuite with TestScheduling {
+class TimeSeriesSpec extends FunSuite with UseTestScheduling {
   val scheduling: TimeSeries = hourly(date"2017-03-25T02:00:00Z")
   val job: Vector[Job[TimeSeries]] = Vector.tabulate(4)(i => Job(i.toString, scheduling)(completed))
   val scheduler = TimeSeriesScheduler(logger)

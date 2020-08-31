@@ -17,7 +17,7 @@ import cats.syntax.either._
 
 import scala.concurrent._
 
-class JsonStateSpec extends FunSuite with TestScheduling {
+class JsonStateSpec extends FunSuite with UseTestScheduling {
 
   val world = Job("world", hourly(Instant.now), "World")(_ => Future.successful(Completed))
   val hello1 = Job("hello1", hourly(Instant.now), "Hello 1")(_ => Future.successful(Completed))
