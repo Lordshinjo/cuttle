@@ -15,7 +15,7 @@ class AuthenticationSpec extends FunSuite {
 
   test("HttpAuth.decodeBase64Credentials should match valid credentials") {
     val inputCreds = "bG9naW46cGFzc3dvcmQK"
-    val expected = ("login", "password")
+    val expected = ("abc", "def")
 
     val actual = BasicAuth.decodeBase64Credentials(inputCreds)
     assert(actual.isDefined && actual.get == expected)
